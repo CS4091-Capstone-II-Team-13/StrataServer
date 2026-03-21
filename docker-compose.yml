@@ -1,0 +1,78 @@
+services:
+  server:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - STRATA_HOST=0.0.0.0
+      - STRATA_PORT=8080
+      - STRATA_DB_HOST=postgres
+      - STRATA_DB_PORT=5432
+      - STRATA_DB_NAME=strata
+      - STRATA_DB_USER=strata
+      - STRATA_DB_PASSWORD=strata-dev-password
+      - STRATA_DB_MAX_CONNS=25
+      - STRATA_MINIO_ENDPOINT=minio:9000
+      - STRATA_MINIO_ACCESS_KEY=minioadmin
+      - STRATA_MINIO_SECRET_KEY=minioadmin
+      - STRATA_MINIO_USE_SSL=false
+      - STRATA_MINIO_CHUNK_BUCKET=chunks
+      - STRATA_JWT_SECRET=dev-secret-change-me-in-production-at-least-32-chars
+      - STRATA_ACCESS_TOKEN_TTL=15m
+      - STRATA_REFRESH_TOKEN_TTL=720h
+      - STRATA_MAX_CHUNK_SIZE=4194304
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: strata
+      POSTGRES_USER: strata
+      POSTGRES_PASSWORD: strata-dev-password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U strata -d strata"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # Runs migrations before the server starts.
+  migrate:
+    image: migrate/migrate:v4.17.0
+    volumes:
+      - ./migrations:/migrations
+    command:
+      [
+        "-path", "/migrations",
+        "-database", "postgres://strata:strata-dev-password@postgres:5432/strata?sslmode=disable",
+        "up"
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+volumes:
+  pgdata:
+  miniodata:

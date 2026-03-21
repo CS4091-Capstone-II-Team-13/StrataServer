@@ -1,0 +1,40 @@
+# Binaries
+strata-server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Go build/cache
+/vendor/
+/bin/
+/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Docker volumes (if local)
+pgdata/
+miniodata/
+
+# Test artifacts
+/tmp/
+coverage.out
+coverage.html
+
+# OS
+Thumbs.db

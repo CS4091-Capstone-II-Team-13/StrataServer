@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS locks;
+DROP TABLE IF EXISTS commit_files;
+ALTER TABLE commits DROP COLUMN IF EXISTS parent_ids;
