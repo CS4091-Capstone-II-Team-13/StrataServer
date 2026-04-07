@@ -151,4 +151,6 @@ migrate -path migrations -database "postgres://..." up
 
 ## License
 
-MIT
+Copyright (c) 2026 Computer Science 4091 - Capstone Team 13 at Missouri S&T, and the Missouri S&T Mars Rover Design Team. All rights reserved.
+
+Strata and all associated source code, documentation, designs, branding, and related materials are the joint property of Capstone Team 13 and the Mars Rover Design Team, unless otherwise noted. No part of this project may be reproduced, distributed, modified, or transmitted in any form without prior written permission from the copyright holders, except as expressly authorized.
