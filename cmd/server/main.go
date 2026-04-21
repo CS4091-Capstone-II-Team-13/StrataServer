@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -113,6 +114,21 @@ func run() error {
 	r.Use(middleware.Logger)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(60 * time.Second))
+
+	// CORS — allow the web UI origin.
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{
+			"https://strata.themrdt.org",
+			"https://strata-web.themrdt.org",
+			"http://localhost:5173",
+			"http://localhost:3000",
+		},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Chunk-Hash"},
+		ExposedHeaders:   []string{"Content-Length", "X-Chunk-Hash"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
 
 	// Health check — no auth required.
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
