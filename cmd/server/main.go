@@ -18,6 +18,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	"strata.themrdt.org/dev/server/internal/config"
+	"strata.themrdt.org/dev/server/internal/docs"
 	"strata.themrdt.org/dev/server/internal/handler"
 	"strata.themrdt.org/dev/server/internal/middleware"
 	"strata.themrdt.org/dev/server/internal/service"
@@ -135,6 +136,13 @@ func run() error {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok","service":"strata"}`))
 	})
+
+	// API docs — Scalar UI at /docs/, raw spec at /docs/openapi.yaml.
+	r.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/docs/", http.StatusMovedPermanently)
+	})
+	r.Get("/docs/", docs.UIHandler)
+	r.Get("/docs/openapi.yaml", docs.SpecHandler)
 
 	// API v1 routes.
 	r.Route("/api/v1", func(r chi.Router) {

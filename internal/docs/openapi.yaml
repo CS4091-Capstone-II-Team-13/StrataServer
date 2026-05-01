@@ -1,0 +1,1200 @@
+openapi: "3.0.3"
+
+info:
+  title: Strata API
+  version: "1.0.0"
+  description: |
+    Version-control system for large binary assets.
+
+    ## Authentication
+    All routes under `/api/v1/projects` require a Bearer JWT access token obtained from `/api/v1/auth/login`.
+
+servers:
+  - url: /
+    description: Local server
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Projects
+  - name: Push
+    description: Upload chunks and commit a new version.
+  - name: Pull
+    description: Compute diffs and download chunks.
+  - name: Branches
+  - name: Merge
+  - name: Locks
+    description: Pessimistic file locking.
+  - name: Versions
+    description: Browse commits, refs, and file trees.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INVALID_REQUEST
+            message:
+              type: string
+              example: Invalid JSON body
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        username:
+          type: string
+          example: alice
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        role:
+          type: string
+          example: member
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TokenPair:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+          description: Seconds until the access token expires.
+          example: 900
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        created_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Commit:
+      type: object
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        parent_id:
+          type: string
+          nullable: true
+        parent_ids:
+          type: array
+          items:
+            type: string
+        author_id:
+          type: string
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CommitResult:
+      type: object
+      properties:
+        commit_id:
+          type: string
+        ref:
+          type: string
+        files_updated:
+          type: integer
+        total_new_chunks:
+          type: integer
+
+    CommitFileEntry:
+      type: object
+      required: [path, total_size, chunk_hashes]
+      properties:
+        path:
+          type: string
+          example: "assets/hero.png"
+        total_size:
+          type: integer
+          format: int64
+          example: 4194304
+        chunk_hashes:
+          type: array
+          items:
+            type: string
+          description: Ordered list of SHA-256 chunk hashes.
+
+    Ref:
+      type: object
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        name:
+          type: string
+          example: main
+        type:
+          type: string
+          enum: [branch, tag]
+        commit_id:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    File:
+      type: object
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        path:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    FileVersion:
+      type: object
+      properties:
+        id:
+          type: string
+        file_id:
+          type: string
+        commit_id:
+          type: string
+        total_size:
+          type: integer
+          format: int64
+        chunk_count:
+          type: integer
+        chunk_hashes:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Lock:
+      type: object
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        file_path:
+          type: string
+        branch:
+          type: string
+        locked_by:
+          type: string
+        locked_by_username:
+          type: string
+        locked_at:
+          type: string
+          format: date-time
+
+    DiffResult:
+      type: object
+      properties:
+        changed_files:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiffFileEntry"
+        total_download_size:
+          type: integer
+          format: int64
+
+    DiffFileEntry:
+      type: object
+      properties:
+        path:
+          type: string
+        action:
+          type: string
+          enum: [added, modified, deleted]
+        needed_chunks:
+          type: array
+          items:
+            type: string
+        full_manifest:
+          type: array
+          items:
+            type: string
+
+    MergeAnalysis:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [fast_forward, clean, conflict]
+        merge_base_id:
+          type: string
+        source_branch:
+          type: string
+        target_branch:
+          type: string
+        source_only:
+          type: array
+          items:
+            $ref: "#/components/schemas/MergeFileEntry"
+        target_only:
+          type: array
+          items:
+            $ref: "#/components/schemas/MergeFileEntry"
+        conflicts:
+          type: array
+          items:
+            $ref: "#/components/schemas/MergeConflict"
+        unchanged:
+          type: integer
+
+    MergeFileEntry:
+      type: object
+      properties:
+        file_id:
+          type: string
+        file_path:
+          type: string
+        file_version_id:
+          type: string
+
+    MergeConflict:
+      type: object
+      properties:
+        file_id:
+          type: string
+        file_path:
+          type: string
+        base_file_version_id:
+          type: string
+        source_file_version_id:
+          type: string
+        target_file_version_id:
+          type: string
+
+    MergeResolution:
+      type: object
+      required: [file_id, file_version_id]
+      properties:
+        file_id:
+          type: string
+        file_version_id:
+          type: string
+
+paths:
+  # ── Health ──────────────────────────────────────────────────────────
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: strata
+
+  # ── Auth ────────────────────────────────────────────────────────────
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                  example: alice
+                email:
+                  type: string
+                  format: email
+                  example: alice@example.com
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Missing or invalid fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Username or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful — returns JWT token pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: New token pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "401":
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout
+      operationId: logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: logged out
+
+  # ── Projects ─────────────────────────────────────────────────────────
+  /api/v1/projects:
+    post:
+      tags: [Projects]
+      summary: Create a project
+      operationId: createProject
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: Missing name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Project name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: [Projects]
+      summary: List projects for the authenticated user
+      operationId: listProjects
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+
+  /api/v1/projects/{projectID}:
+    parameters:
+      - name: projectID
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Projects]
+      summary: Get a project
+      operationId: getProject
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags: [Projects]
+      summary: Delete a project
+      operationId: deleteProject
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Project deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: deleted
+
+  # ── Push ─────────────────────────────────────────────────────────────
+  /api/v1/projects/{projectID}/push/check:
+    post:
+      tags: [Push]
+      summary: Check which chunks are already stored
+      operationId: checkChunks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hashes]
+              properties:
+                hashes:
+                  type: array
+                  items:
+                    type: string
+                  description: SHA-256 hex hashes of all chunks in the push.
+      responses:
+        "200":
+          description: Chunk existence report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  existing:
+                    type: array
+                    items:
+                      type: string
+                    description: Hashes the server already has.
+                  needed:
+                    type: array
+                    items:
+                      type: string
+                    description: Hashes that must be uploaded.
+
+  /api/v1/projects/{projectID}/push/chunk:
+    post:
+      tags: [Push]
+      summary: Upload a single chunk
+      operationId: uploadChunk
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Chunk-Hash
+          in: header
+          required: true
+          description: Expected SHA-256 hex hash of the chunk body (64 chars).
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: Chunk stored
+        "400":
+          description: Missing header or hash mismatch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          description: Chunk exceeds 4 MB limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/projects/{projectID}/push/commit:
+    post:
+      tags: [Push]
+      summary: Commit a push — finalize a new version
+      operationId: commitPush
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message, files]
+              properties:
+                parent_commit_id:
+                  type: string
+                  nullable: true
+                  description: Omit for the very first commit on a new ref.
+                message:
+                  type: string
+                ref:
+                  type: string
+                  example: main
+                  description: Branch name to advance.
+                files:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/CommitFileEntry"
+      responses:
+        "201":
+          description: Commit created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommitResult"
+        "409":
+          description: Parent conflict or files locked by another user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Pull ─────────────────────────────────────────────────────────────
+  /api/v1/projects/{projectID}/pull/diff:
+    post:
+      tags: [Pull]
+      summary: Compute the diff between two commits
+      operationId: computeDiff
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from_commit_id:
+                  type: string
+                  nullable: true
+                  description: Omit for a fresh clone (all files treated as added).
+                to_commit_id:
+                  type: string
+                  description: Target commit. Mutually exclusive with `ref`.
+                ref:
+                  type: string
+                  description: Resolve this branch/tag to get the target commit.
+      responses:
+        "200":
+          description: Diff result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiffResult"
+        "400":
+          description: Missing to_commit_id / ref
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Ref not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/projects/{projectID}/pull/chunk/{hash}:
+    get:
+      tags: [Pull]
+      summary: Download a chunk by hash
+      operationId: downloadChunk
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: hash
+          in: path
+          required: true
+          description: SHA-256 hex hash (64 chars).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Raw chunk bytes
+          headers:
+            X-Chunk-Hash:
+              description: Echo of the requested hash.
+              schema:
+                type: string
+            Content-Length:
+              schema:
+                type: integer
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid hash format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Chunk not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Branches ─────────────────────────────────────────────────────────
+  /api/v1/projects/{projectID}/branches:
+    post:
+      tags: [Branches]
+      summary: Create a branch
+      operationId: createBranch
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: feature/new-assets
+                from_ref:
+                  type: string
+                  default: main
+                  description: Branch to create from.
+      responses:
+        "201":
+          description: Branch created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ref"
+        "404":
+          description: Source ref not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Branch already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Merge ─────────────────────────────────────────────────────────────
+  /api/v1/projects/{projectID}/merge/analyze:
+    post:
+      tags: [Merge]
+      summary: Analyze a merge — detect conflicts before committing
+      operationId: analyzeMerge
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_branch, target_branch]
+              properties:
+                source_branch:
+                  type: string
+                target_branch:
+                  type: string
+      responses:
+        "200":
+          description: Merge analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MergeAnalysis"
+        "400":
+          description: Same branch on both sides
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Branches share no common ancestor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/projects/{projectID}/merge:
+    post:
+      tags: [Merge]
+      summary: Execute a merge
+      operationId: executeMerge
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_branch, target_branch]
+              properties:
+                source_branch:
+                  type: string
+                target_branch:
+                  type: string
+                message:
+                  type: string
+                resolutions:
+                  type: array
+                  description: Required when the analyze step returned conflicts.
+                  items:
+                    $ref: "#/components/schemas/MergeResolution"
+      responses:
+        "200":
+          description: Merge successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commit:
+                    $ref: "#/components/schemas/Commit"
+                  message:
+                    type: string
+                    example: Merge successful
+        "400":
+          description: Same branch or invalid resolution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Unresolved conflicts — run analyze first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Locks ─────────────────────────────────────────────────────────────
+  /api/v1/projects/{projectID}/locks:
+    parameters:
+      - name: projectID
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Locks]
+      summary: List active file locks
+      operationId: listLocks
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active locks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Lock"
+    post:
+      tags: [Locks]
+      summary: Acquire a file lock
+      operationId: acquireLock
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_path]
+              properties:
+                file_path:
+                  type: string
+                  example: "assets/hero.png"
+                branch:
+                  type: string
+                  default: main
+      responses:
+        "201":
+          description: Lock acquired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lock"
+        "409":
+          description: File is already locked by another user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags: [Locks]
+      summary: Release a file lock
+      operationId: releaseLock
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_path]
+              properties:
+                file_path:
+                  type: string
+                force:
+                  type: boolean
+                  default: false
+                  description: Override another user's lock (admin use).
+      responses:
+        "200":
+          description: Lock released
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: unlocked
+        "403":
+          description: You do not own this lock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Versions ──────────────────────────────────────────────────────────
+  /api/v1/projects/{projectID}/commits:
+    get:
+      tags: [Versions]
+      summary: List commits
+      operationId: listCommits
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated commit list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Commit"
+
+  /api/v1/projects/{projectID}/commits/{commitID}:
+    parameters:
+      - name: projectID
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: commitID
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Versions]
+      summary: Get a commit
+      operationId: getCommit
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Commit details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Commit"
+        "404":
+          description: Commit not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/projects/{projectID}/commits/{commitID}/files:
+    get:
+      tags: [Versions]
+      summary: List file versions in a commit
+      operationId: listCommitFiles
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: commitID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FileVersion"
+
+  /api/v1/projects/{projectID}/refs:
+    get:
+      tags: [Versions]
+      summary: List refs (branches and tags)
+      operationId: listRefs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Refs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Ref"
+
+  /api/v1/projects/{projectID}/tree:
+    get:
+      tags: [Versions]
+      summary: Get the file tree at a ref
+      operationId: getTree
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectID
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: ref
+          in: query
+          schema:
+            type: string
+            default: main
+          description: Branch or tag name.
+      responses:
+        "200":
+          description: File tree at the resolved commit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ref:
+                    type: string
+                  commit_id:
+                    type: string
+                  files:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/File"
+        "404":
+          description: Ref not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
